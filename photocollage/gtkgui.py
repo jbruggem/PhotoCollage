@@ -14,6 +14,7 @@
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
+from configparser import ConfigParser
 import copy
 import gettext
 from io import BytesIO
@@ -157,7 +158,7 @@ class PhotoCollageWindow(Gtk.Window):
     TARGET_TYPE_TEXT = 1
     TARGET_TYPE_URI = 2
 
-    def __init__(self):
+    def __init__(self, config: ConfigParser):
         super().__init__(title=_("PhotoCollage"))
         self.history = []
         self.history_index = 0
@@ -165,9 +166,10 @@ class PhotoCollageWindow(Gtk.Window):
         class Options:
             def __init__(self):
                 self.border_w = 0.01
-                self.border_c = "black"
-                self.out_w = 800
-                self.out_h = 600
+                self.border_c = config["main"]["default_color"]
+                self.out_w = config["main"].getint("default_width")
+                self.out_h = config["main"].getint("default_height")
+                self.out_folder = config["main"]["save_path"]
 
         self.opts = Options()
 
@@ -394,6 +396,7 @@ class PhotoCollageWindow(Gtk.Window):
 
         dialog = Gtk.FileChooserDialog(_("Save image"), button.get_toplevel(),
                                        Gtk.FileChooserAction.SAVE)
+        Gtk.FileChooser.set_current_folder(dialog, self.opts.out_folder)
         dialog.add_button(Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL)
         dialog.add_button(Gtk.STOCK_OK, Gtk.ResponseType.OK)
         dialog.set_do_overwrite_confirmation(True)
@@ -813,11 +816,37 @@ class PreviewFileChooserDialog(Gtk.FileChooserDialog):
         self.set_preview_widget_active(True)
 
 
+
+def load_configuration():
+    import os
+    config_folder = os.path.join(os.path.expanduser('~'), '.config', 'PhotoCollage')
+    os.makedirs(config_folder, exist_ok=True)
+    config_file = os.path.join(config_folder, 'config.ini')
+
+    import configparser
+    config = configparser.ConfigParser()
+    config['main'] = {
+        'default_color': 'black',
+        'default_width': 800,
+        'default_height': 600,
+        'save_path': os.path.expanduser('~'),
+    }
+    try:
+        config.read(config_file)
+    except Exception as e:
+        print(e)
+
+    with open(config_file, 'w') as f:
+        config.write(f)
+
+    return config
+
 def main():
     # Enable threading. Without that, threads hang!
     GObject.threads_init()
 
-    win = PhotoCollageWindow()
+    config = load_configuration()
+    win = PhotoCollageWindow(config)
     win.connect("delete-event", Gtk.main_quit)
     win.show_all()
 
